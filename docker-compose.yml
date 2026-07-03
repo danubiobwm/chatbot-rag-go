@@ -1,0 +1,26 @@
+version: "3.8"
+
+services:
+  localstack:
+    image: localstack/localstack:3.4
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3,sqs,dynamodb,textract
+      - DEBUG=0
+      - DEFAULT_REGION=us-east-1
+    volumes:
+      - "./deploy/localstack-init:/etc/localstack/init/ready.d"
+      - "localstack-data:/var/lib/localstack"
+
+  opensearch:
+    image: opensearchproject/opensearch:2.14.0
+    environment:
+      - discovery.type=single-node
+      - plugins.security.disabled=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+
+volumes:
+  localstack-data:
