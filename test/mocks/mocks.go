@@ -85,3 +85,20 @@ type LoggerMock struct{ mock.Mock }
 func (m *LoggerMock) Info(msg string, kv ...interface{})  { m.Called(msg, kv) }
 func (m *LoggerMock) Error(msg string, kv ...interface{}) { m.Called(msg, kv) }
 func (m *LoggerMock) Debug(msg string, kv ...interface{}) { m.Called(msg, kv) }
+
+type ChannelAdapterMock struct{ mock.Mock }
+
+func (m *ChannelAdapterMock) ChannelName() string {
+	return m.Called().String(0)
+}
+
+func (m *ChannelAdapterMock) Send(ctx context.Context, sender domain.Sender, text string) error {
+	return m.Called(ctx, sender, text).Error(0)
+}
+
+type RAGQueryerMock struct{ mock.Mock }
+
+func (m *RAGQueryerMock) Execute(ctx context.Context, msg domain.Message, sessionID string) (domain.RAGAnswer, error) {
+	args := m.Called(ctx, msg, sessionID)
+	return args.Get(0).(domain.RAGAnswer), args.Error(1)
+}

@@ -8,17 +8,21 @@ import (
 	"github.com/danubiobwm/chatbot-rag-go/pkg/logger"
 )
 
+type ragQueryer interface {
+	Execute(ctx context.Context, msg domain.Message, sessionID string) (domain.RAGAnswer, error)
+}
+
 // RouteMessageUseCase recebe uma mensagem já normalizada (independente do
 // canal de origem) e decide o que fazer com ela. Hoje só existe o fluxo
 // de pergunta -> RAG, mas é aqui que entrariam comandos como "resetar
 // conversa" sem precisar tocar nos adapters de canal (Open/Closed).
 type RouteMessageUseCase struct {
-	ragQuery *RAGQueryUseCase
+	ragQuery ragQueryer
 	channels map[string]domain.ChannelAdapter
 	log      logger.Logger
 }
 
-func NewRouteMessageUseCase(ragQuery *RAGQueryUseCase, adapters []domain.ChannelAdapter, log logger.Logger) *RouteMessageUseCase {
+func NewRouteMessageUseCase(ragQuery ragQueryer, adapters []domain.ChannelAdapter, log logger.Logger) *RouteMessageUseCase {
 	byName := make(map[string]domain.ChannelAdapter, len(adapters))
 	for _, a := range adapters {
 		byName[a.ChannelName()] = a
