@@ -62,6 +62,19 @@ func (a *WhatsAppAdapter) Send(ctx context.Context, sender domain.Sender, text s
 	return nil
 }
 
+// ConsoleAdapter imprime a resposta no stdout — usado apenas em desenvolvimento
+// local para testar sem Slack/WhatsApp configurados.
+type ConsoleAdapter struct{}
+
+func NewConsoleAdapter() *ConsoleAdapter { return &ConsoleAdapter{} }
+
+func (a *ConsoleAdapter) ChannelName() string { return "local" }
+
+func (a *ConsoleAdapter) Send(_ context.Context, sender domain.Sender, text string) error {
+	fmt.Printf("[local] user=%s\n%s\n", sender.UserID, text)
+	return nil
+}
+
 // SlackAdapter envia mensagens via Slack Web API (chat.postMessage).
 type SlackAdapter struct {
 	httpClient *http.Client

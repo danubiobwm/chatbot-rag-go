@@ -22,6 +22,7 @@ import (
 	awsinfra "github.com/danubiobwm/chatbot-rag-go/internal/infrastructure/aws"
 	"github.com/danubiobwm/chatbot-rag-go/internal/infrastructure/cache"
 	"github.com/danubiobwm/chatbot-rag-go/internal/infrastructure/channels"
+	"github.com/danubiobwm/chatbot-rag-go/internal/infrastructure/ollama"
 	"github.com/danubiobwm/chatbot-rag-go/internal/handler"
 	"github.com/danubiobwm/chatbot-rag-go/internal/usecase"
 	"github.com/danubiobwm/chatbot-rag-go/pkg/logger"
@@ -57,16 +58,27 @@ func main() {
 	// --- implementações concretas das interfaces de domain ---
 	docsRepo := awsinfra.NewDynamoDocumentRepository(dynamoClient, cfg.DynamoDocumentsTbl)
 	sessionsRepo := awsinfra.NewDynamoSessionRepository(dynamoClient, cfg.DynamoSessionsTbl)
-	embedder := awsinfra.NewBedrockEmbedder(bedrockClient)
-	llm := awsinfra.NewBedrockLLM(bedrockClient, cfg.BedrockLLMModelID)
 	vectorStore := awsinfra.NewOpenSearchVectorStore(osClient, cfg.OpenSearchIndex)
+
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+
+	var embedder domain.Embedder
+	var llm domain.LLMClient
+	if cfg.OllamaBaseURL != "" {
+		logg.Info("using Ollama for embeddings and LLM", "base_url", cfg.OllamaBaseURL)
+		embedder = ollama.NewEmbedder(cfg.OllamaBaseURL, cfg.OllamaEmbedModel, httpClient)
+		llm = ollama.NewLLM(cfg.OllamaBaseURL, cfg.OllamaLLMModel, httpClient)
+	} else {
+		embedder = awsinfra.NewBedrockEmbedder(bedrockClient)
+		llm = awsinfra.NewBedrockLLM(bedrockClient, cfg.BedrockLLMModelID)
+	}
 	responseCache := cache.NewInMemoryResponseCache(10 * time.Minute)
 	queue := awsinfra.NewSQSMessageQueue(sqsClient, map[string]string{
 		"extraction-queue": "http://localhost:4566/000000000000/extraction-queue", // LocalStack em dev
 	})
 
-	httpClient := &http.Client{Timeout: 10 * time.Second}
 	adapters := []domain.ChannelAdapter{
+		channels.NewConsoleAdapter(),
 		channels.NewWhatsAppAdapter(httpClient, cfg.WhatsAppAPIBaseURL, cfg.WhatsAppToken, cfg.WhatsAppPhoneID),
 		channels.NewSlackAdapter(httpClient, cfg.SlackBotToken),
 	}

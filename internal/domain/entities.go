@@ -21,52 +21,52 @@ const (
 
 // Document representa um arquivo de origem (PDF de RH, jurídico etc).
 type Document struct {
-	ID          string
-	SourceKey   string // chave no bucket de origem
-	ContentHash string // hash do conteúdo, usado para deduplicação
-	Category    string // ex: "rh", "juridico"
-	Status      DocumentStatus
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID          string         `dynamodbav:"id"`
+	SourceKey   string         `dynamodbav:"source_key"`
+	ContentHash string         `dynamodbav:"content_hash"`
+	Category    string         `dynamodbav:"category"`
+	Status      DocumentStatus `dynamodbav:"status"`
+	CreatedAt   time.Time      `dynamodbav:"created_at"`
+	UpdatedAt   time.Time      `dynamodbav:"updated_at"`
 }
 
 // Chunk é um pedaço de texto segmentado de um documento, pronto para embedding.
 type Chunk struct {
-	ID         string
-	DocumentID string
-	Content    string
-	Order      int
-	Embedding  []float32
-	Metadata   map[string]string
+	ID         string            `dynamodbav:"id"`
+	DocumentID string            `dynamodbav:"document_id"`
+	Content    string            `dynamodbav:"content"`
+	Order      int               `dynamodbav:"order"`
+	Embedding  []float32         `dynamodbav:"embedding"`
+	Metadata   map[string]string `dynamodbav:"metadata"`
 }
 
 // Sender identifica de onde veio uma mensagem de chat.
 type Sender struct {
-	Channel string // "whatsapp", "slack", "teams"
-	UserID  string
+	Channel string `dynamodbav:"channel"` // "whatsapp", "slack", "teams"
+	UserID  string `dynamodbav:"user_id"`
 }
 
 // Message é uma mensagem recebida de um usuário em qualquer canal.
 type Message struct {
-	ID        string
-	Sender    Sender
-	Text      string
-	Timestamp time.Time
+	ID        string    `dynamodbav:"id"`
+	Sender    Sender    `dynamodbav:"sender"`
+	Text      string    `dynamodbav:"text"`
+	Timestamp time.Time `dynamodbav:"timestamp"`
 }
 
 // ConversationTurn é um par pergunta/resposta guardado na sessão.
 type ConversationTurn struct {
-	Question  string
-	Answer    string
-	Timestamp time.Time
+	Question  string    `dynamodbav:"question"`
+	Answer    string    `dynamodbav:"answer"`
+	Timestamp time.Time `dynamodbav:"timestamp"`
 }
 
 // Session guarda o contexto curto de uma conversa, com expiração (TTL).
 type Session struct {
-	SessionID string
-	Sender    Sender
-	History   []ConversationTurn
-	ExpiresAt time.Time
+	SessionID string             `dynamodbav:"session_id"`
+	Sender    Sender             `dynamodbav:"sender"`
+	History   []ConversationTurn `dynamodbav:"history"`
+	ExpiresAt time.Time          `dynamodbav:"expires_at"`
 }
 
 // RetrievedChunk é um chunk retornado pela busca vetorial, com score de relevância.

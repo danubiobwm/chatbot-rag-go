@@ -1,8 +1,10 @@
 package config
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strings"
 )
 
 // Config centraliza tudo que vem do ambiente. Nenhum outro pacote lê
@@ -22,6 +24,11 @@ type Config struct {
 
 	BedrockLLMModelID string
 
+	// Ollama — quando OllamaBaseURL estiver definido, Embedder e LLM usam Ollama em vez de Bedrock.
+	OllamaBaseURL    string
+	OllamaEmbedModel string
+	OllamaLLMModel   string
+
 	SlackBotToken      string
 	WhatsAppToken      string
 	WhatsAppPhoneID    string
@@ -30,7 +37,36 @@ type Config struct {
 	HTTPPort string
 }
 
+// loadDotEnv reads .env from the working directory and sets any variable that
+// is not already present in the environment. It silently skips missing files.
+func loadDotEnv() {
+	f, err := os.Open(".env")
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, val, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		val = strings.TrimSpace(val)
+		if os.Getenv(key) == "" {
+			os.Setenv(key, val)
+		}
+	}
+	_ = scanner.Err()
+}
+
 func Load() (*Config, error) {
+	loadDotEnv()
 	cfg := &Config{
 		Env:                getEnv("ENV", "development"),
 		AWSRegion:          getEnv("AWS_REGION", "us-east-1"),
@@ -42,6 +78,9 @@ func Load() (*Config, error) {
 		OpenSearchIndex:    getEnv("OPENSEARCH_INDEX", "chatbot-regulatorio"),
 		OpenSearchURL:      getEnv("OPENSEARCH_URL", "http://localhost:9200"),
 		BedrockLLMModelID:  getEnv("BEDROCK_LLM_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0"),
+		OllamaBaseURL:      os.Getenv("OLLAMA_BASE_URL"),
+		OllamaEmbedModel:   getEnv("OLLAMA_EMBED_MODEL", "mxbai-embed-large"),
+		OllamaLLMModel:     getEnv("OLLAMA_LLM_MODEL", "llama3.2"),
 		SlackBotToken:      os.Getenv("SLACK_BOT_TOKEN"),
 		WhatsAppToken:      os.Getenv("WHATSAPP_TOKEN"),
 		WhatsAppPhoneID:    os.Getenv("WHATSAPP_PHONE_ID"),

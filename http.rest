@@ -1,0 +1,83 @@
+# ============================================================
+# 1. Criar índice OpenSearch (rodar uma vez após make up)
+# ============================================================
+PUT http://localhost:9200/chatbot-regulatorio
+Content-Type: application/json
+
+{
+  "settings": { "index": { "knn": true } },
+  "mappings": {
+    "properties": {
+      "document_id": { "type": "keyword" },
+      "content":     { "type": "text" },
+      "embedding":   { "type": "knn_vector", "dimension": 1024 }
+    }
+  }
+}
+
+###
+
+# ============================================================
+# 2. Healthcheck da API
+# ============================================================
+GET http://localhost:8080/healthz
+
+###
+
+# ============================================================
+# 3. Upload de PDF no S3 (LocalStack)
+#    Substitua ./meu-documento.pdf pelo caminho real do arquivo
+# ============================================================
+PUT http://localhost:4566/chatbot-regulatorio-docs/meu-documento.pdf
+Content-Type: application/pdf
+
+< ./meu-documento.pdf
+
+###
+
+# ============================================================
+# 4. Consulta via chat (RAG)
+# ============================================================
+POST http://localhost:8080/webhook/message
+Content-Type: application/json
+
+{
+  "channel": "slack",
+  "user_id": "U123456",
+  "text": "O que diz o documento sobre regulamentação?"
+}
+
+###
+
+# ============================================================
+# 5. Consulta via WhatsApp
+# ============================================================
+POST http://localhost:8080/webhook/message
+Content-Type: application/json
+
+{
+  "channel": "whatsapp",
+  "user_id": "5511999999999",
+  "text": "Quais são as penalidades previstas?"
+}
+
+###
+
+# ============================================================
+# 6. Verificar chunks indexados no OpenSearch
+# ============================================================
+GET http://localhost:9200/chatbot-regulatorio/_count
+
+###
+
+# ============================================================
+# 7. Busca direta no OpenSearch (debug)
+# ============================================================
+GET http://localhost:9200/chatbot-regulatorio/_search
+Content-Type: application/json
+
+{
+  "size": 3,
+  "_source": ["document_id", "content"],
+  "query": { "match_all": {} }
+}

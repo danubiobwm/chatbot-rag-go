@@ -1,0 +1,290 @@
+{
+  "info": {
+    "name": "Chatbot RAG Go — Local",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "api_url",      "value": "http://localhost:8080" },
+    { "key": "os_url",       "value": "http://localhost:9200" },
+    { "key": "os_index",     "value": "chatbot-regulatorio" },
+    { "key": "s3_url",       "value": "http://localhost:4566" },
+    { "key": "s3_bucket",    "value": "chatbot-regulatorio-docs" }
+  ],
+  "item": [
+    {
+      "name": "1 - OpenSearch",
+      "item": [
+        {
+          "name": "Criar índice (rodar uma vez)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{os_url}}/{{os_index}}", "host": ["{{os_url}}"], "path": ["{{os_index}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"settings\": { \"index\": { \"knn\": true } },\n  \"mappings\": {\n    \"properties\": {\n      \"document_id\": { \"type\": \"keyword\" },\n      \"content\":     { \"type\": \"text\" },\n      \"embedding\":   { \"type\": \"knn_vector\", \"dimension\": 1024 }\n    }\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Índice criado\", () => {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 400]);",
+                  "  if (pm.response.code === 400) {",
+                  "    pm.expect(pm.response.json().error.type).to.equal('resource_already_exists_exception');",
+                  "  }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Total de chunks indexados",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{os_url}}/{{os_index}}/_count", "host": ["{{os_url}}"], "path": ["{{os_index}}", "_count"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Campo count presente\", () => pm.expect(body).to.have.property('count'));",
+                  "console.log('Chunks no índice:', body.count);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar primeiros 3 chunks (debug)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{os_url}}/{{os_index}}/_search", "host": ["{{os_url}}"], "path": ["{{os_index}}", "_search"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"size\": 3,\n  \"_source\": [\"document_id\", \"content\"],\n  \"query\": { \"match_all\": {} }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const hits = pm.response.json().hits.hits;",
+                  "console.log('Chunks retornados:', hits.length);",
+                  "hits.forEach((h, i) => console.log(`[${i}]`, h._source.content?.slice(0, 100)));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Deletar índice (reset)",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{os_url}}/{{os_index}}", "host": ["{{os_url}}"], "path": ["{{os_index}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Índice deletado\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2 - S3 LocalStack (ingestão de PDF)",
+      "item": [
+        {
+          "name": "Upload PDF",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/pdf" }],
+            "url": {
+              "raw": "{{s3_url}}/{{s3_bucket}}/meu-documento.pdf",
+              "host": ["{{s3_url}}"],
+              "path": ["{{s3_bucket}}", "meu-documento.pdf"]
+            },
+            "body": {
+              "mode": "file",
+              "file": { "src": "" }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Selecione o PDF em Body > binary antes de enviar"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Upload 200\", () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar arquivos no bucket",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{s3_url}}/{{s3_bucket}}", "host": ["{{s3_url}}"], "path": ["{{s3_bucket}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "console.log(pm.response.text().slice(0, 500));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3 - API",
+      "item": [
+        {
+          "name": "Healthcheck",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{api_url}}/healthz", "host": ["{{api_url}}"], "path": ["healthz"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Status ok\", () => pm.expect(pm.response.json().status).to.equal('ok'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Chat — pergunta regulatória",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{api_url}}/webhook/message", "host": ["{{api_url}}"], "path": ["webhook", "message"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"local\",\n  \"user_id\": \"dev-user-1\",\n  \"text\": \"O que diz o documento sobre regulamentação?\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Aceito 202\", () => pm.response.to.have.status(202));",
+                  "console.log('Resposta impressa no terminal da API (channel=local)');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Chat — segunda pergunta (testa histórico de sessão)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{api_url}}/webhook/message", "host": ["{{api_url}}"], "path": ["webhook", "message"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"local\",\n  \"user_id\": \"dev-user-1\",\n  \"text\": \"Quais são as penalidades previstas?\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Aceito 202\", () => pm.response.to.have.status(202));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Chat — body inválido (teste de erro)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{api_url}}/webhook/message", "host": ["{{api_url}}"], "path": ["webhook", "message"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"local\",\n  \"user_id\": \"\",\n  \"text\": \"\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Bad Request 400\", () => pm.response.to.have.status(400));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Chat — canal desconhecido (teste de erro)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{api_url}}/webhook/message", "host": ["{{api_url}}"], "path": ["webhook", "message"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"telegram\",\n  \"user_id\": \"dev-user-1\",\n  \"text\": \"teste\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Internal Error 500 (canal não registrado)\", () => pm.response.to.have.status(500));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
